@@ -23,7 +23,7 @@ setup(
     long_description_content_type = "text/markdown",
     install_requires = [ 
         "numba ~= 0.56.2",
-        "numpy ~= 1.23.3",
+        "numpy ~= 1.3.0",
         "pandas ~= 1.5.0"
     ],
     url = "https://github.com/professorcode1/Event-Analysis",

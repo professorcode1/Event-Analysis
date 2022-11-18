@@ -1,6 +1,1 @@
-include *.ipynb
-recursive-include EventAnalysis *.cu
-recursive-include EventAnalysis *.py
-recursive-include EventAnalysis *.pyc
-recursive-include dist *.gz
-recursive-include dist *.whl
+include *.in
