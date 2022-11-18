@@ -1,0 +1,21 @@
+Metadata-Version: 2.1
+Name: event-analysis
+Version: 0.0.1
+Summary: This package allows you to run Event Coincidence Analysis and Event Synchronization on your event series on the CPU and Nvidia-GPU
+Home-page: https://github.com/professorcode1/Event-Analysis
+Author: Raghav Kumar
+Author-email: raghkum2000@gmail.com
+License: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Description-Content-Type: text/markdown
+License-File: LICENSE.txt
+
+# Event-Analysis
+
+

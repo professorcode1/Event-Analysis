@@ -1,0 +1,9 @@
+LICENSE.txt
+README.md
+setup.py
+EventAnalysis/EventAnalysis.py
+EventAnalysis/event_analysis.egg-info/PKG-INFO
+EventAnalysis/event_analysis.egg-info/SOURCES.txt
+EventAnalysis/event_analysis.egg-info/dependency_links.txt
+EventAnalysis/event_analysis.egg-info/requires.txt
+EventAnalysis/event_analysis.egg-info/top_level.txt
