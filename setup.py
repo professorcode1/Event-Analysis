@@ -5,12 +5,10 @@ with open("README.md", "r") as fh:
 
 setup(
     name = "event-analysis",
-    version = "0.0.1",
+    version = "0.0.7",
     description = "This package allows you to run Event Coincidence Analysis and Event Synchronization on your event series on the CPU and Nvidia-GPU",
     py_modules = [ "EventAnalysis" ],
     package_dir = { '' : "EventAnalysis" },
-    package_data = { '' : [ 'EventAnalysis/kernels/*.cu' ] } ,
-    include_package_data=True,
     classifiers = [
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Science/Research",
@@ -22,9 +20,9 @@ setup(
     long_description = long_description,
     long_description_content_type = "text/markdown",
     install_requires = [ 
-        "numba ~= 0.56.2",
-        "numpy ~= 1.3.0",
-        "pandas ~= 1.5.0"
+        "numba ",
+        "numpy ",
+        "pandas"
     ],
     url = "https://github.com/professorcode1/Event-Analysis",
     author = "Raghav Kumar",

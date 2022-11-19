@@ -10,6 +10,455 @@ number_of_seconds_per_hour = 3600
 ECA_kernel_name = "ECA_kernel"
 ES_kernel_name = "ES_kernel"
 P_value_kernel_name = "pVal_kernel"
+ES_CODE = '''
+#define i blockIdx.x
+#define j blockIdx.y
+#define tid_x threadIdx.x
+#define tid_y threadIdx.y
+#define bDm_x blockDim.x
+#define bDm_y blockDim.y
+#define WARP_SIZE 32
+
+__forceinline__ __device__ int rowMajor_2D(int r, int c, int R, int C){
+    return c + C * r;
+}
+
+extern "C"{
+__global__ void ES_kernel(float * C, int const * const grdPnt_numOfEvent_,int const * const grid_to_event_, const int num_of_grids, const int max_nm_events){
+    // int i = blockIdx.x;
+    // int j = blockIdx.y;
+    // int tid_x = threadIdx.x;
+	// int tid_y = threadIdx.y;
+    // blockIdx, threadIdx, blockDim are stored in a special register, copying it into a variable will waste time and space
+    __shared__ float j_per_conv[ BLOCKDIM_X * BLOCKDIM_Y ];
+    __shared__ int grid_to_event_i[ BLOCKDIM_X + 3 ];
+    __shared__ int grid_to_event_j[ BLOCKDIM_Y + 3 ];
+    __shared__ int  s_i, s_j, total_threads, max_nm_events_cached, C_matrix_index;
+    
+    
+    int thread_id = rowMajor_2D(tid_x, tid_y, bDm_x, bDm_y);
+    if(thread_id == 0){
+        C_matrix_index = rowMajor_2D(i,j,num_of_grids,num_of_grids);
+        C[C_matrix_index] = 0;
+        s_i = grdPnt_numOfEvent_[ i ];
+        s_j = grdPnt_numOfEvent_[ j ];
+        total_threads = bDm_x * bDm_y;
+        max_nm_events_cached = max_nm_events;
+    }
+    __syncthreads();
+    
+    if (s_i < 3 || s_j < 3) return;
+    int iter_i = 0, iter_j;
+    while( bDm_x * iter_i <  s_i - 2){
+        
+        int l = (bDm_x * iter_i + tid_x) + 1;
+
+        if(tid_y == 0 && l <= s_i - 2)
+            grid_to_event_i[tid_x + 2] = grid_to_event_[i * max_nm_events_cached +  l];
+        
+        if( thread_id == 0 ){
+            grid_to_event_i[ 1 ] = grid_to_event_[ i * max_nm_events_cached +  bDm_x * iter_i ];
+            if(iter_i){
+                grid_to_event_i[0] = grid_to_event_[ i * max_nm_events_cached +  bDm_x * iter_i - 1];
+            }else{
+                grid_to_event_i[0] = -1;
+            }
+            int max_l = min(bDm_x * (iter_i + 1) + 1, s_i - 1);
+            int end_event_index = max_l - bDm_x * iter_i + 1;
+            grid_to_event_i[ end_event_index ] = grid_to_event_[ i * max_nm_events_cached + max_l ];
+        }
+        // __syncthreads();
+        
+            iter_j = 0;
+        while( bDm_y * iter_j < s_j - 2 ){
+            
+            j_per_conv[ thread_id ] = 0;
+            
+            int m = (bDm_y * iter_j + tid_y) + 1;
+
+            if(l <= s_i - 2 && m <= s_j - 2){
+                if(tid_x == 0)
+                    grid_to_event_j[tid_y + 1] = grid_to_event_[j * max_nm_events_cached +  m];
+
+                if( thread_id == 0 ){
+                    grid_to_event_j[ 0 ] = grid_to_event_[ j * max_nm_events_cached +   bDm_y * iter_j ];
+                    if(s_j - 1 > bDm_y * (iter_j + 1) + 1){
+                        int max_m = bDm_y * (iter_j + 1) + 1;
+                        int end_event_index = bDm_y + 1 ;
+                        grid_to_event_j[ end_event_index     ] = grid_to_event_[ j * max_nm_events_cached + max_m ];
+                        grid_to_event_j[ end_event_index + 1 ] = grid_to_event_[ j * max_nm_events_cached + max_m + 1];
+                    }else{
+                        int max_m = s_j - 1;
+                        int end_event_index = max_m - bDm_y * iter_j;
+                        grid_to_event_j[ end_event_index     ] = grid_to_event_[ j * max_nm_events_cached + max_m ];
+                        grid_to_event_j[ end_event_index + 1 ] = -1; 
+                    }
+                }
+            }
+            __syncthreads();
+
+            if(l <= s_i - 2 && m <= s_j - 2){
+                char J_is_one, J_is_half;{
+                    int t_l_minus_two = grid_to_event_i[tid_x];
+                    int t_l_minus_one = grid_to_event_i[tid_x + 1];
+                    int t_l = grid_to_event_i[tid_x + 2];
+                    int t_l_plus_one = grid_to_event_i[tid_x + 3];
+                    int t_m_minus_one = grid_to_event_j[tid_y];
+                    int t_m = grid_to_event_j[tid_y + 1];
+                    int t_m_plus_one = grid_to_event_j[tid_y + 2];
+                    int t_m_plus_two = grid_to_event_j[tid_y + 3];
+    
+                    char sigma_i_j_l_m, sigma_j_i_m_l_minus_one , sigma_j_i_m_plus_one_l;{
+                        int two_tao = min(min(t_l_plus_one - t_l, t_l - t_l_minus_one) , min(t_m_plus_one - t_m , t_m - t_m_minus_one));
+                        int time_dif = t_l - t_m;
+                        sigma_i_j_l_m = (0 < time_dif) & ((2 * time_dif) <= two_tao);
+                    }{
+                        
+                        int two_tao;
+                        if (t_l_minus_two +1)
+                            two_tao = min(min(t_l - t_l_minus_one, t_l_minus_one - t_l_minus_two), min(t_m_plus_one - t_m , t_m - t_m_minus_one));
+                        else
+                            two_tao = min(t_l - t_l_minus_one, min(t_m_plus_one - t_m , t_m - t_m_minus_one));
+                        int time_dif = t_m - t_l_minus_one;
+                        sigma_j_i_m_l_minus_one = (0 < time_dif) & ((2 * time_dif) <= two_tao);
+                    }{
+                        int two_tao;
+                        if(t_m_plus_two + 1)
+                            two_tao = min(min(t_l_plus_one - t_l, t_l - t_l_minus_one) , min(t_m_plus_two - t_m_plus_one, t_m_plus_one - t_m));
+                        else
+                            two_tao = min(min(t_l_plus_one - t_l, t_l - t_l_minus_one) , t_m_plus_one - t_m);
+                        int time_dif = t_m_plus_one - t_l;
+                        sigma_j_i_m_plus_one_l = (0 < time_dif) & ((2 * time_dif) <= two_tao);
+                    }
+                    char intermediate_condition = sigma_j_i_m_l_minus_one | sigma_j_i_m_plus_one_l;
+                    J_is_one = sigma_i_j_l_m &  (!intermediate_condition);
+                    J_is_half = (t_l == t_m) | (sigma_i_j_l_m & intermediate_condition);
+                }
+                j_per_conv[thread_id] += 0.5f * J_is_half;  
+                j_per_conv[thread_id] += J_is_one;
+            }
+            __syncthreads();
+
+            // for(int s = 1 << (int) ceil(log2((double)total_threads) - 1); s > WARP_SIZE ; s >>= 1){
+            //     if(thread_id < s && thread_id + s < total_threads)
+            //         j_per_conv[thread_id] += j_per_conv[thread_id + s];
+                
+            //     __syncthreads();
+            // }
+            // if(thread_id < WARP_SIZE)
+            //     warpReduce(j_per_conv, thread_id);
+
+            for(int s = 1 << (int) ceil(log2((double)total_threads) - 1); s > 0 ; s >>= 1){
+                if(thread_id < s && thread_id + s < total_threads)
+                    j_per_conv[thread_id] += j_per_conv[thread_id + s];
+                
+                __syncthreads();
+            }
+
+
+            if(thread_id == 0){
+                C[C_matrix_index] += j_per_conv[0];
+            }
+            // __syncthreads();
+                iter_j++;
+        }
+
+        // if(thread_id == 0)
+            iter_i++;
+
+        // __syncthreads();
+
+    }
+}
+}
+'''
+PVALUE_CODE = '''
+  #define i blockIdx.x
+  #define j blockIdx.y
+  #define tid_x threadIdx.x
+  #define tid_y threadIdx.y
+  #define tid_z threadIdx.y
+  #define bDm_x blockDim.x
+  #define bDm_y blockDim.y
+  #define bDm_z blockDim.z
+  #define WARP_SIZE 32
+  #define CUDART_PI_F 3.14159265f
+  __forceinline__ __device__ int rowMajor_2D(int r, int c, int R, int C){
+      return c + C * r;
+  }
+
+  __forceinline__ __device__ int colMajor_2D(int r, int c, int R, int C){
+      return r + R * c;
+  }
+
+  extern "C"{
+  __global__ void pVal_kernel( double *pVal_precursor, double *pVal_trigger, float const * const r_precursor, float const * const r_trigger, 
+      const int * const grdPnt_numOfEvent_,  const int Delta_T,  const int Tau, const int num_of_grids, const int T, const double * const logedFactorial){
+          
+      __shared__ double answer_collection_buffer[ BLOCKDIM_X ];
+      __shared__ double prb_prec_coinc_shared;
+      __shared__ double prec_bnml_rgt_lg_shared;
+      __shared__ double prec_bnml_lft_lg_shared;
+
+      if( tid_x == 0 ){
+          prb_prec_coinc_shared = ((double)Delta_T / (double)(T - Tau));
+          prec_bnml_rgt_lg_shared = pow(1 - prb_prec_coinc_shared, grdPnt_numOfEvent_[ j ] ) ; 
+          prec_bnml_lft_lg_shared = log(1 - prec_bnml_rgt_lg_shared) ;
+          prec_bnml_rgt_lg_shared = log(prec_bnml_rgt_lg_shared);
+          pVal_precursor[ rowMajor_2D(i, j, num_of_grids, num_of_grids) ] = 0;
+      }
+      __syncthreads();
+      double prec_bnml_rgt_val = prec_bnml_rgt_lg_shared;
+      double prec_bnml_lft_val = prec_bnml_lft_lg_shared;
+      
+      int K_end = grdPnt_numOfEvent_[ i ];
+      int K_start = round( r_precursor[rowMajor_2D(i, j, num_of_grids, num_of_grids)] * K_end );
+      int iter_i = 0;
+      while( K_start + iter_i * BLOCKDIM_X < K_end ){
+          answer_collection_buffer[ tid_x ] = 0;
+          int K = K_start + iter_i * BLOCKDIM_X + tid_x;
+          if( K <= K_end ){
+              answer_collection_buffer[ tid_x ] = exp( logedFactorial[ K_end ] - logedFactorial[ K ] - logedFactorial[ K_end - K ] + K * prec_bnml_lft_val + ( K_end - K ) * prec_bnml_rgt_val );
+          }
+
+          __syncthreads();
+          for(int s=1 << (int)ceil(log2((float)BLOCKDIM_X) - 1) ; s > 0 ; s >>= 1){
+              if(tid_x < s && tid_x + s < BLOCKDIM_X){
+                  answer_collection_buffer[ tid_x ] += answer_collection_buffer[ tid_x + s ];
+              }
+              __syncthreads();
+          }
+          if( tid_x == 0 ){
+              pVal_precursor[ rowMajor_2D(i, j, num_of_grids, num_of_grids) ] += answer_collection_buffer[0];
+          }
+          iter_i++;
+      }
+
+      __syncthreads();
+
+      if( tid_x == 0 ){
+          prec_bnml_rgt_lg_shared = pow( 1 - prb_prec_coinc_shared, grdPnt_numOfEvent_[ i ] ) ; 
+          prec_bnml_lft_lg_shared = log( 1 - prec_bnml_rgt_lg_shared ) ;
+          prec_bnml_rgt_lg_shared = log( prec_bnml_rgt_lg_shared );
+          pVal_trigger[ rowMajor_2D(i, j, num_of_grids, num_of_grids) ] = 0;
+      }
+      __syncthreads();
+      prec_bnml_rgt_val = prec_bnml_rgt_lg_shared;
+      prec_bnml_lft_val = prec_bnml_lft_lg_shared;
+      
+      K_end = grdPnt_numOfEvent_[ j ];
+      K_start = round( r_trigger[rowMajor_2D(i, j, num_of_grids, num_of_grids)] * K_end );
+      iter_i = 0;
+      while( K_start + iter_i * BLOCKDIM_X < K_end ){
+          answer_collection_buffer[ tid_x ] = 0;
+          int K = K_start + iter_i * BLOCKDIM_X + tid_x;
+          if( K <= K_end ){
+              answer_collection_buffer[ tid_x ] = exp( logedFactorial[ K_end ] - logedFactorial[ K ] - logedFactorial[ K_end - K ] + K * prec_bnml_lft_val + ( K_end - K ) * prec_bnml_rgt_val );
+          }
+
+          __syncthreads();
+          for(int s=1 << (int)ceil(log2((float)BLOCKDIM_X) - 1) ; s > 0 ; s >>= 1){
+              if(tid_x < s && tid_x + s < BLOCKDIM_X){
+                  answer_collection_buffer[ tid_x ] += answer_collection_buffer[ tid_x + s ];
+              }
+              __syncthreads();
+          }
+          if( tid_x == 0 ){
+              pVal_trigger[ rowMajor_2D(i, j, num_of_grids, num_of_grids) ] += answer_collection_buffer[0];
+          }
+          iter_i++;
+      }
+
+
+  }
+  }
+'''
+ECA_CODE = '''
+#define i blockIdx.x
+#define j blockIdx.y
+#define tid_x threadIdx.x
+#define tid_y threadIdx.y
+#define tid_z threadIdx.y
+#define bDm_x blockDim.x
+#define bDm_y blockDim.y
+#define bDm_z blockDim.z
+#define WARP_SIZE 32
+
+__forceinline__ __device__ int rowMajor_2D(int r, int c, int R, int C){
+    return c + C * r;
+}
+
+__forceinline__ __device__ int colMajor_2D(int r, int c, int R, int C){
+    return r + R * c;
+}
+
+extern "C"{
+__global__ void ECA_kernel(float *r_precursor, float *r_trigger, const int * const grdPnt_numOfEvent_, const int * const grid_to_event_,  const int Delta_T, 
+    const int Tau, const int num_of_grids, const int max_nm_events){
+    __shared__ int  matrix_interm_buffer[ BLOCKDIM_X ];
+    //matrix to temp store results (l/m) in a column major order
+    __shared__ int outer_event_time_buffer[ BLOCKDIM_X ];
+    __shared__ int inner_event_time_buffer[ BLOCKDIM_X ];
+    __shared__ int s_i, s_j,  r_matrix_index;
+    if( tid_x == 0 ){ 
+        r_matrix_index = rowMajor_2D(i, j, num_of_grids, num_of_grids);
+        r_precursor[ r_matrix_index ] = 0;
+        r_trigger[ r_matrix_index ] = 0; 
+        s_i = grdPnt_numOfEvent_[ i ];
+        s_j = grdPnt_numOfEvent_[ j ];
+    }
+        
+    __syncthreads();
+    if (s_i < 1 || s_j < 1) return;
+    int iter_i = 0, iter_j;
+    
+    while( iter_i * BLOCKDIM_X < s_i){
+        
+        int l = iter_i * BLOCKDIM_X + tid_x;
+        
+        if( l < s_i){
+            outer_event_time_buffer[ tid_x ] = grid_to_event_[ i * max_nm_events + l];
+        }
+        
+        matrix_interm_buffer[ tid_x ] = 0;
+
+        // if( tid_x == 0 ){
+            iter_j = 0;
+        // } 
+
+        // __syncthreads();
+
+        while(iter_j * BLOCKDIM_X < s_j){
+            
+            int m = iter_j * BLOCKDIM_X + tid_x;
+            
+            if( m < s_j ){
+                inner_event_time_buffer[ tid_x ] = grid_to_event_[ j * max_nm_events + m ];
+            }
+
+            int max_m = min( (iter_j + 1)  * BLOCKDIM_X, s_j) - ( iter_j * BLOCKDIM_X ) - 1;
+            int bin_ser_low = 0, bin_ser_high = max_m;
+            m = (bin_ser_low + bin_ser_high) / 2;
+            
+            __syncthreads();
+            if( l < s_i ){
+                for( int bin_ser_iter = 1 ; bin_ser_iter <= BLOCKDIM_X ; bin_ser_iter <<= 1){
+                    int diff = outer_event_time_buffer[ tid_x ] - Tau - inner_event_time_buffer[ min( max(m, 0), max_m ) ];
+                    char undershot = diff < 0 ;
+                    char overshot =  diff > Delta_T ;
+                    char perfect = (undershot | overshot) ^ 1 ;
+                    bin_ser_low = ( overshot * ( m + 1 ) ) + ( ( overshot ^ 1 ) * bin_ser_low);
+                    bin_ser_high = ( undershot * ( m - 1 ) ) + ( ( undershot ^ 1 ) * bin_ser_high );
+                    m = (bin_ser_low + bin_ser_high) / 2;
+                    matrix_interm_buffer[ tid_x ] |= perfect;
+                }
+            }
+            __syncthreads();
+
+            // if( tid_x == 0 ){
+                iter_j ++;
+            // }
+
+        
+        }
+
+        for(int s=1 << (int)ceil(log2((float)BLOCKDIM_X) - 1) ; s > 0 ; s >>= 1){
+            if(tid_x < s && tid_x + s < BLOCKDIM_X){
+                matrix_interm_buffer[ tid_x ] += matrix_interm_buffer[ tid_x + s ];
+            }
+            __syncthreads();
+        }
+
+        if( tid_x == 0 ){
+            r_precursor[ r_matrix_index ] += matrix_interm_buffer[ 0 ];
+        }
+            iter_i++;
+        // __syncthreads();
+    
+    }
+
+    if(tid_x == 0){
+        r_precursor[ r_matrix_index ] /= s_i;
+    }
+
+    // __syncthreads();
+
+        iter_i = 0;
+
+    while( iter_i * BLOCKDIM_X < s_j ){
+        
+        int m = iter_i * BLOCKDIM_X + tid_x;
+        
+        if( m < s_j ){
+            outer_event_time_buffer[ tid_x ] = grid_to_event_[ j * max_nm_events + m];
+        }
+        
+        matrix_interm_buffer[ tid_x ] = 0;
+
+        // if( tid_x == 0 ){
+            iter_j = 0;
+        // } 
+
+        // __syncthreads();
+
+        while(iter_j * BLOCKDIM_X < s_i){
+            
+            int l = iter_j * BLOCKDIM_X + tid_x;
+            
+            if( l < s_i ){
+                inner_event_time_buffer[ tid_x ] = grid_to_event_[ i * max_nm_events + l ];
+            }
+
+            int max_l = min( (iter_j + 1)  * BLOCKDIM_X, s_i) - ( iter_j * BLOCKDIM_X ) - 1;
+            int bin_ser_low = 0, bin_ser_high = max_l;
+            l = (bin_ser_low + bin_ser_high) / 2;
+            
+            __syncthreads();
+            if( m < s_j ){
+                for( int bin_ser_iter = 1 ; bin_ser_iter <= BLOCKDIM_X ; bin_ser_iter <<= 1){
+                    int diff = inner_event_time_buffer[ min( max(l, 0), max_l ) ] - Tau - outer_event_time_buffer[ tid_x ] ;
+                    char undershot = diff < 0 ;
+                    char overshot =  diff > Delta_T ;
+                    char perfect = (undershot | overshot) ^ 1 ;
+                    bin_ser_high = ( overshot * ( l - 1 ) ) + ( ( overshot ^ 1 ) * bin_ser_high);
+                    bin_ser_low = ( undershot * ( l + 1 ) ) + ( ( undershot ^ 1 ) * bin_ser_low );
+                    l = (bin_ser_low + bin_ser_high) / 2;
+                    matrix_interm_buffer[ tid_x ] |= perfect;
+                }
+            }
+            __syncthreads();
+
+            // if( tid_x == 0 ){
+                iter_j ++;
+            // }
+
+        
+        }
+
+        for(int s=1 << (int)ceil(log2((float)BLOCKDIM_X) - 1) ; s > 0 ; s >>= 1){
+            if(tid_x < s && tid_x + s < BLOCKDIM_X){
+                matrix_interm_buffer[ tid_x ] += matrix_interm_buffer[ tid_x + s ];
+            }
+            __syncthreads();
+        }
+
+        if( tid_x == 0 ){
+            r_trigger[ r_matrix_index ] += matrix_interm_buffer[ 0 ];
+        }
+        // __syncthreads();
+            iter_i++;
+    
+    }
+
+    if(tid_x == 0){
+        r_trigger[ r_matrix_index ] /= s_j;
+    }
+
+    
+
+}
+}
+'''
 
 __all__ = ['EventAnalysis']
 
@@ -148,11 +597,11 @@ def printTime(time_spent):
     print(f"Time elapsed to run the computation :: {minutes_spent} minutes {seconds_spent} seconds ")
 
 class EventAnalysis:
-    def __init__(self, rain_event_df, device_Id = None):
+    def __init__(self, event_df, device_Id = None):
         #As defined in Event synchrony measures for functional climate network analysis: A case study on South American rainfall dynamics
-        self.date_index = rain_event_df.index
-        self.coordinate_columns = rain_event_df.columns
-        self.rain_event_matrix = rain_event_df.to_numpy(copy = True)
+        self.date_index = event_df.index
+        self.coordinate_columns = event_df.columns
+        self.rain_event_matrix = event_df.to_numpy(copy = True)
 
         assert self.rain_event_matrix.dtype == np.bool, "The rain event dataframe does not have bool as its internal type, are you sure you sent an event series and not a time series?"
         # the rows are dates,and the columns are grid points.
@@ -196,9 +645,9 @@ class EventAnalysis:
         import pycuda.driver as cuda
         from pycuda.compiler import SourceModule
         cuda.init()
-        self.ES_Source = open( os.path.join( os.path.dirname( __file__ ), "kernels", "event_Sync_.cu" ), "r" ).read()
-        self.ECA_Source = open( os.path.join( os.path.dirname( __file__ ), "kernels", "event_Coinc_.cu" ), "r" ).read()
-        self.ECA_Pval_Source = open( os.path.join( os.path.dirname( __file__ ), "kernels", "pValue_.cu" ), "r" ).read()
+        self.ES_Source = ES_CODE
+        self.ECA_Source = ECA_CODE
+        self.ECA_Pval_Source = PVALUE_CODE
 
         self.ES_block_cnfg = 16, 8, 1
         self.ECA_block_cnfg = 32, 1, 1
@@ -468,7 +917,7 @@ class EventAnalysis:
         printTime(time_spent)
         return return_value
 
-    def ECA_Cuda_vec(self, Delta_T_objs, taus = 0, return_p_values = False, block = None, pValFillNA = True):
+    def ECA_vec_Cuda(self, Delta_T_objs, taus = 0, return_p_values = False, block = None, pValFillNA = True):
         numr_results = len(Delta_T_objs)
         if type(taus) == int:
             taus = np.full(numr_results, taus, dtype = np.int32)
