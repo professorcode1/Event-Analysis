@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name = "event-analysis",
-    version = "0.0.7",
+    version = "0.0.9",
     description = "This package allows you to run Event Coincidence Analysis and Event Synchronization on your event series on the CPU and Nvidia-GPU",
     py_modules = [ "EventAnalysis" ],
     package_dir = { '' : "EventAnalysis" },

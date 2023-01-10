@@ -596,6 +596,23 @@ def printTime(time_spent):
     seconds_spent = round( time_spent - 60 * minutes_spent)
     print(f"Time elapsed to run the computation :: {minutes_spent} minutes {seconds_spent} seconds ")
 
+@njit(parallel = True, nogil = True)
+def normaliseQMatrix(Q, grdPnt_numOfEvent):
+    (number_of_grid_points, _) = Q.shape
+    for i in prange(number_of_grid_points):
+        number_of_events_i = grdPnt_numOfEvent[ i ]
+        if number_of_events_i <= 2:
+            continue
+        Q[i, i] /= ( number_of_events_i - 2 )
+        for j in np.arange( i ):
+            number_of_events_j = grdPnt_numOfEvent[ j ]
+            if number_of_events_j <= 2:
+                continue
+            normal_factor = np.sqrt( ( number_of_events_i - 2 ) * ( number_of_events_j - 2 ) )
+            Q[i, j] /= normal_factor
+            Q[j, i] /= normal_factor
+            
+
 class EventAnalysis:
     def __init__(self, event_df, device_Id = None):
         #As defined in Event synchrony measures for functional climate network analysis: A case study on South American rainfall dynamics
@@ -701,6 +718,7 @@ class EventAnalysis:
         printTime(time_spent)
         
         Q = np.add(c_i_j, c_i_j.T).astype('float32')
+        normaliseQMatrix(Q, self.grdPnt_numOfEvent)
         df = pd.DataFrame(Q, index = self.coordinate_columns, columns = self.coordinate_columns)
         df.index.name = "Coordinates"
         return df
@@ -840,6 +858,7 @@ class EventAnalysis:
         printTime(time_spent)
 
         Q = np.add(C, C.T).astype('float32')
+        normaliseQMatrix(Q, self.grdPnt_numOfEvent)
         df = pd.DataFrame(Q, index = self.coordinate_columns, columns = self.coordinate_columns)
         df.index.name = "Coordinates"
         return df

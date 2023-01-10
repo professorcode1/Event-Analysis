@@ -5,7 +5,7 @@ The python library to calculate **Event Synchronization** and **Event Coincidenc
 
 To learn about ECA, read [this](https://arxiv.org/abs/1508.03534) <sup>1</sup>
 
-To learn about EA, read [this](https://aip.scitation.org/doi/10.1063/1.5134012) <sup>2</sup>
+To learn about ES, read [this](https://aip.scitation.org/doi/10.1063/1.5134012) <sup>2</sup>
 
 To install the library 
 ```
