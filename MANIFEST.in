@@ -1,1 +1,1 @@
-include *.in
+recursive-include EventAnalysis *.py

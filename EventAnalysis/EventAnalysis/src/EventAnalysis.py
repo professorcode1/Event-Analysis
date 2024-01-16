@@ -6,26 +6,22 @@ import math
 import pandas as pd
 import os
 import time
-from .ECAKernel import *
-from .ESKernel import *
-from .ECALoop import *
-from .ESLoop import *
-from .utils import *
+from .ECAKernel import * 
+from .ESKernel import * 
+from .ECALoop import * 
+from .ESLoop import * 
+from .utils import * 
 from datetime import timedelta
 
 __all__ = ['EventAnalysis']
 
-
-
-
-
-            
 
 class EventAnalysis:
     def __init__(self, event_df_:pd.DataFrame, device_Id:None|int = None):
         #As defined in Event synchrony measures for functional climate network analysis: A case study on South American rainfall dynamics
         event_df = event_df_.sort_index()
         date_index = event_df.index
+        self.date_index = date_index
         assert isinstance(date_index, pd.DatetimeIndex), "the index of the event_df must be of type pandas DatetimeIndex"
         self.coordinate_columns = event_df.columns
         rain_event_matrix = event_df.to_numpy(copy = True)

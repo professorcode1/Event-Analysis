@@ -1,14 +1,15 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
     name = "event-analysis",
-    version = "0.0.9",
+    version = "1.0.5",
     description = "This package allows you to run Event Coincidence Analysis and Event Synchronization on your event series on the CPU and Nvidia-GPU",
     py_modules = [ "EventAnalysis" ],
     package_dir = { '' : "EventAnalysis" },
+    packages=find_packages(where="EventAnalysis"),
     classifiers = [
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Science/Research",
