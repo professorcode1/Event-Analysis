@@ -29,12 +29,10 @@ class EventAnalysis:
 
         assert rain_event_matrix.dtype == bool, "The rain event dataframe does not have bool as its internal type, are you sure you sent an event series and not a time series?"
         
-        # the rows are dates,and the columns are grid points.
-        # the ex array will be all the index's where there is an event
-        # (ex[0][i],ex[1][i]) => (grid index, date index) of event i
         starting_date = date_index[0]
         ending_date = date_index[-1]
         self.T = ( ending_date - starting_date ).total_seconds() // self.time_normalization_factor
+        assert self.T <= np.iinfo(np.int32).max,f'the time span of data provided({self.T}) is over what a 32bit int can store {np.iinfo(np.int32).max}. Erroring now to prevent returning incorrect resuts' 
         self.number_of_grid_points = rain_event_matrix.shape[1]
 
         self.grid_to_event_map, \
