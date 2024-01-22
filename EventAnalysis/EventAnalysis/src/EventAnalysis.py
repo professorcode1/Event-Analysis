@@ -40,7 +40,7 @@ class EventAnalysis:
         self.grid_to_event_map, \
             self.grdPnt_numOfEvent, \
             self.maximum_number_of_events =\
-            create_grid_metadata_arrays(date_index, rain_event_matrix)
+            create_grid_metadata_arrays(date_index, rain_event_matrix, self.time_normalization_factor)
 
         self.logedFactorial = np.empty(self.maximum_number_of_events + 1, dtype = np.float64)
         self.logedFactorial[ 0 ] = 0

@@ -7,14 +7,14 @@ __all__ = [
     "NUMBER_OF_SECONDS_PER_HOUR"
 ]
 NUMBER_OF_SECONDS_PER_HOUR = 3600
-def create_grid_metadata_arrays(date_index: pd.DatetimeIndex, rain_event_matrix:np.ndarray):
+def create_grid_metadata_arrays(date_index: pd.DatetimeIndex, rain_event_matrix:np.ndarray, time_normalization_factor:int):
     
     maximum_number_of_events = -1
     number_of_time_steps, number_of_event_series = rain_event_matrix.shape
     grid_to_event_map_py:list[list[int]] = []
     starting_date = date_index[0]
     grdPnt_numOfEvent:list[int] = []
-    date_index_array = np.asarray(list(map(lambda x:x.total_seconds(), ((date_index - starting_date) // 3600))))
+    date_index_array = np.asarray(list(map(lambda x:x.total_seconds(), ((date_index - starting_date) // time_normalization_factor))))
     for event_serie_index in range(number_of_event_series):
         this_event_arr:list[int] = []
         for time_step in range(number_of_time_steps):
