@@ -4,9 +4,9 @@ __all__ = [
     "createGPUFunction",
     "printTime",
     "create_grid_metadata_arrays",
-    "number_of_seconds_per_hour"
+    "NUMBER_OF_SECONDS_PER_HOUR"
 ]
-number_of_seconds_per_hour = 3600
+NUMBER_OF_SECONDS_PER_HOUR = 3600
 def create_grid_metadata_arrays(date_index: pd.DatetimeIndex, rain_event_matrix:np.ndarray):
     
     maximum_number_of_events = -1

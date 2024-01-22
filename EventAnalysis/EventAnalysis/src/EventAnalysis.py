@@ -17,11 +17,12 @@ __all__ = ['EventAnalysis']
 
 
 class EventAnalysis:
-    def __init__(self, event_df_:pd.DataFrame, device_Id:None|int = None):
+    def __init__(self, event_df_:pd.DataFrame, device_Id:None|int = None, time_normalization_factor = NUMBER_OF_SECONDS_PER_HOUR):
         #As defined in Event synchrony measures for functional climate network analysis: A case study on South American rainfall dynamics
         event_df = event_df_.sort_index()
         date_index = event_df.index
         self.date_index = date_index
+        self.time_normalization_factor = time_normalization_factor
         assert isinstance(date_index, pd.DatetimeIndex), "the index of the event_df must be of type pandas DatetimeIndex"
         self.coordinate_columns = event_df.columns
         rain_event_matrix = event_df.to_numpy(copy = True)
@@ -33,7 +34,7 @@ class EventAnalysis:
         # (ex[0][i],ex[1][i]) => (grid index, date index) of event i
         starting_date = date_index[0]
         ending_date = date_index[-1]
-        self.T = ( ending_date - starting_date ).total_seconds() // number_of_seconds_per_hour
+        self.T = ( ending_date - starting_date ).total_seconds() // self.time_normalization_factor
         self.number_of_grid_points = rain_event_matrix.shape[1]
 
         self.grid_to_event_map, \
@@ -87,11 +88,9 @@ class EventAnalysis:
         self.num_of_grids_GPU_ = np.array(self.number_of_grid_points, dtype=np.int32)
         self.max_nm_events_GPU_ = np.array(self.maximum_number_of_events, dtype=np.int32)
 
-
-
     def ES(self, tauMax:float = np.Inf):
 
-
+        assert tauMax == np.Inf, "Currently the code doesn't use tauMax. Please open an issue and notify the author that it is required and it will be added ASAP!"
         Tau_hlpr_left = np.roll(self.grid_to_event_map, -1, axis=1) - self.grid_to_event_map
         Tau_hlpr_right = self.grid_to_event_map - np.roll(self.grid_to_event_map, 1, axis=1)
         Tau_hlpr = np.minimum(Tau_hlpr_left, Tau_hlpr_right)
@@ -120,7 +119,7 @@ class EventAnalysis:
         r_precursor_i_j = np.zeros((self.number_of_grid_points, self.number_of_grid_points), dtype = np.float32)
         r_trigger_i_j = np.zeros((self.number_of_grid_points, self.number_of_grid_points), dtype = np.float32)
 
-        Delta_T = Delta_T_obj.total_seconds() // number_of_seconds_per_hour
+        Delta_T = Delta_T_obj.total_seconds() // self.time_normalization_factor
         
         time_spent = 0
         start_time = time.time()
@@ -175,7 +174,7 @@ class EventAnalysis:
 
         time_spent = 0
         for res in np.arange(numr_results):
-            Delta_T = int(Delta_T_objs[res].total_seconds() // number_of_seconds_per_hour)
+            Delta_T = int(Delta_T_objs[res].total_seconds() // self.time_normalization_factor)
 
             tau = taus[res]
             r_precursor_i_j = np.zeros((self.number_of_grid_points, self.number_of_grid_points), dtype = np.float32)
@@ -219,6 +218,7 @@ class EventAnalysis:
         printTime(time_spent)
 
     def ES_Cuda(self, tauMax = np.Inf, block = None):
+        assert tauMax == np.Inf, "Currently the code doesn't use tauMax. Please open an issue and notify the author that it is required and it will be added ASAP!"
         import pycuda.driver as cuda# type: ignore 
         from pycuda.compiler import SourceModule# type: ignore 
         from pycuda._driver import device_attribute# type: ignore 
@@ -270,7 +270,7 @@ class EventAnalysis:
                 self.ECA_GPU = createGPUFunction(self.ECA_Source, ECA_kernel_name , self.ECA_block_cnfg)
                 self.ECA_Pval_GPU = createGPUFunction(self.ECA_Pval_Source, P_value_kernel_name , self.ECA_block_cnfg)
 
-        Delta_T_GPU = np.array(Delta_T_obj.total_seconds() // number_of_seconds_per_hour, dtype=np.int32)
+        Delta_T_GPU = np.array(Delta_T_obj.total_seconds() // self.time_normalization_factor, dtype=np.int32)
         Tau_GPU = np.array(tau, dtype=np.int32)
         r_precursor_GPU = cuda.mem_alloc(4 * self.number_of_grid_points * self.number_of_grid_points)
         r_trigger_GPU = cuda.mem_alloc(4 * self.number_of_grid_points * self.number_of_grid_points)
@@ -366,7 +366,7 @@ class EventAnalysis:
             pval_precursor_gpu = cuda.mem_alloc( self.number_of_grid_points * self.number_of_grid_points * 8 )
             pval_trigger_gpu = cuda.mem_alloc( self.number_of_grid_points * self.number_of_grid_points * 8 )
 
-        Delta_T_GPU = np.array([Delta_T_obj.total_seconds() // number_of_seconds_per_hour for Delta_T_obj in Delta_T_objs], dtype=np.int32)
+        Delta_T_GPU = np.array([Delta_T_obj.total_seconds() // self.time_normalization_factor for Delta_T_obj in Delta_T_objs], dtype=np.int32)
         for res in np.arange(numr_results):
             # print(res)
             
