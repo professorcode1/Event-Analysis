@@ -86,9 +86,9 @@ class EventAnalysis:
         self.num_of_grids_GPU_ = np.array(self.number_of_grid_points, dtype=np.int32)
         self.max_nm_events_GPU_ = np.array(self.maximum_number_of_events, dtype=np.int32)
 
-    def ES(self, tauMax:float = np.Inf):
+    def ES(self, tauMax:float = float('inf')):
 
-        assert tauMax == np.Inf, "Currently the code doesn't use tauMax. Please open an issue and notify the author that it is required and it will be added ASAP!"
+        assert tauMax == float('inf'), "Currently the code doesn't use tauMax. Please open an issue and notify the author that it is required and it will be added ASAP!"
         Tau_hlpr_left = np.roll(self.grid_to_event_map, -1, axis=1) - self.grid_to_event_map
         Tau_hlpr_right = self.grid_to_event_map - np.roll(self.grid_to_event_map, 1, axis=1)
         Tau_hlpr = np.minimum(Tau_hlpr_left, Tau_hlpr_right)
@@ -215,8 +215,8 @@ class EventAnalysis:
                 yield (EC_p_max, EC_p_mean, EC_t_max, EC_t_mean)
         printTime(time_spent)
 
-    def ES_Cuda(self, tauMax = np.Inf, block = None):
-        assert tauMax == np.Inf, "Currently the code doesn't use tauMax. Please open an issue and notify the author that it is required and it will be added ASAP!"
+    def ES_Cuda(self, tauMax = float('inf'), block = None):
+        assert tauMax == float('inf'), "Currently the code doesn't use tauMax. Please open an issue and notify the author that it is required and it will be added ASAP!"
         import pycuda.driver as cuda# type: ignore 
         from pycuda.compiler import SourceModule# type: ignore 
         from pycuda._driver import device_attribute# type: ignore 
